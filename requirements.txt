@@ -1,0 +1,15 @@
+pathway
+langgraph
+langchain
+langchain-openai
+pydantic
+openai
+python-dotenv
+pandas
+fastapi
+uvicorn
+websockets
+jinja2
+requests
+aiohttp
+langchain-google-genai

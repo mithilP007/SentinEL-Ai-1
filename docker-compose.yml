@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  sentinel-core:
+    build: .
+    container_name: sentinel_core
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+    volumes:
+      - ./src/memory_log.csv:/app/src/memory_log.csv

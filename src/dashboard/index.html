@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SentinEL Core v1.1 | Agentic AI Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --panel-bg: rgba(10, 20, 30, 0.95);
+            --text-main: #00ff41;
+            --text-dim: #008f11;
+            --accent-alert: #ff0055;
+            --accent-yellow: #ffff00;
+            --accent-cyan: #00ffff;
+            --grid-line: rgba(0, 255, 65, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image:
+                linear-gradient(var(--grid-line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: var(--text-main);
+            font-family: 'Courier New', monospace;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Scanline */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            background-size: 100% 2px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            border-bottom: 2px solid var(--text-dim);
+        }
+
+        header h1 {
+            font-size: 1.4rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            text-shadow: 0 0 10px var(--text-main);
+        }
+
+        .status-badges {
+            display: flex;
+            gap: 10px;
+        }
+
+        .badge {
+            font-size: 11px;
+            padding: 3px 10px;
+            border: 1px solid var(--text-main);
+            background: rgba(0, 255, 65, 0.1);
+        }
+
+        .badge.active {
+            color: var(--text-main);
+        }
+
+        .badge.agent {
+            color: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            background: rgba(0, 255, 255, 0.1);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 10px;
+            padding: 10px;
+            height: calc(100vh - 60px);
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--text-dim);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            background: var(--text-dim);
+            color: #000;
+            padding: 5px 10px;
+            font-weight: bold;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow: auto;
+            padding: 10px;
+        }
+
+        /* Map Panel */
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        /* Log entries */
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 3px 8px;
+            border-left: 3px solid transparent;
+            font-size: 11px;
+        }
+
+        .log-entry.OBSERVE {
+            border-color: #fff;
+            color: #ccc;
+        }
+
+        .log-entry.ANALYZE {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .log-entry.DECIDE {
+            border-color: var(--accent-yellow);
+            color: var(--accent-yellow);
+        }
+
+        .log-entry.ACT {
+            border-color: var(--accent-alert);
+            color: var(--accent-alert);
+            font-weight: bold;
+        }
+
+        .log-entry.AUTO {
+            border-color: #ff00ff;
+            color: #ff00ff;
+        }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .metric-card {
+            border: 1px solid var(--text-dim);
+            padding: 15px;
+            text-align: center;
+        }
+
+        .metric-val {
+            font-size: 1.8rem;
+            font-weight: bold;
+            text-shadow: 0 0 10px var(--text-main);
+        }
+
+        .metric-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+
+        /* Suggestions */
+        .suggestion {
+            background: rgba(0, 255, 65, 0.05);
+            border: 1px solid var(--text-dim);
+            padding: 8px;
+            margin-bottom: 5px;
+            font-size: 11px;
+        }
+
+        .suggestion .action {
+            color: var(--accent-cyan);
+            font-weight: bold;
+        }
+
+        .suggestion .confidence {
+            float: right;
+            color: var(--accent-yellow);
+        }
+
+        .suggestion.auto {
+            border-color: #ff00ff;
+            background: rgba(255, 0, 255, 0.1);
+        }
+
+        /* Charts */
+        #trend-chart {
+            max-height: 150px;
+        }
+
+        /* Export Button */
+        .export-btn {
+            background: transparent;
+            border: 1px solid var(--text-main);
+            color: var(--text-main);
+            padding: 3px 10px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 10px;
+        }
+
+        .export-btn:hover {
+            background: var(--text-main);
+            color: #000;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>⚡ SENTINEL CORE v1.1</h1>
+        <div class="status-badges">
+            <span class="badge active">NEWS: LIVE</span>
+            <span class="badge active">AIS: LIVE</span>
+            <span class="badge agent">🤖 AGENT: ACTIVE</span>
+            <button class="export-btn" onclick="togglePostTransformer()" id="pt-toggle">🧬 POST-TRANSFORMER
+                MODE</button>
+            <button class="export-btn" onclick="exportLogs()">📥 EXPORT LOGS</button>
+        </div>
+    </header>
+
+    <!-- Post-Transformer Modal -->
+    <div id="post-transformer-modal"
+        style="display:none; position:fixed; top:50px; right:20px; width:400px; background:rgba(0,20,0,0.98); border:2px solid #00ff41; padding:20px; z-index:999; font-size:12px;">
+        <div style="color:#00ffff; font-weight:bold; margin-bottom:15px; font-size:14px;">🧬 WHY THIS IS
+            POST-TRANSFORMER</div>
+        <div style="margin-bottom:10px;">
+            <span style="color:#ff00ff;">●</span> <b>Event Memory is Persistent</b><br>
+            <span style="color:#888; margin-left:15px;">Unlike GPT context windows, our SQLite memory persists across
+                sessions</span>
+        </div>
+        <div style="margin-bottom:10px;">
+            <span style="color:#ff00ff;">●</span> <b>Risk Models Adapt Over Time</b><br>
+            <span style="color:#888; margin-left:15px;">Confidence scores improve based on historical accuracy</span>
+        </div>
+        <div style="margin-bottom:10px;">
+            <span style="color:#ff00ff;">●</span> <b>Decisions Use Historical Context</b><br>
+            <span style="color:#888; margin-left:15px;">Actions depend on prior outcomes, not just current prompt</span>
+        </div>
+        <div style="margin-bottom:10px;">
+            <span style="color:#ff00ff;">●</span> <b>Agent Behavior Evolves</b><br>
+            <span style="color:#888; margin-left:15px;">System learns which interventions save the most days</span>
+        </div>
+        <div style="margin-top:15px; padding-top:10px; border-top:1px solid #008f11; color:#ffff00;">
+            "Transformers cannot learn continuously" — <b>Sentinel Core does.</b>
+        </div>
+        <button onclick="togglePostTransformer()"
+            style="margin-top:15px; background:#ff00ff; border:none; color:#000; padding:5px 15px; cursor:pointer;">CLOSE</button>
+    </div>
+
+    <div class="main-grid">
+        <!-- Panel 1: Map -->
+        <div class="panel">
+            <div class="panel-header">
+                <span>🌍 GLOBAL RISK MAP</span>
+                <span id="map-stats">0 markers</span>
+            </div>
+            <div class="panel-content" style="padding:0;">
+                <div id="map"></div>
+            </div>
+        </div>
+
+        <!-- Panel 2: Reasoning Trace -->
+        <div class="panel">
+            <div class="panel-header">
+                <span>🧠 REASONING ENGINE</span>
+                <span id="trace-count">0 events</span>
+            </div>
+            <div class="panel-content" id="trace-logs"></div>
+        </div>
+
+        <!-- Panel 3: Metrics + Trends -->
+        <div class="panel">
+            <div class="panel-header">PERFORMANCE METRICS</div>
+            <div class="panel-content">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-val" id="mttd">--</div>
+                        <div class="metric-label">MTTD</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val" id="mtta">--</div>
+                        <div class="metric-label">MTTA</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val" id="days-saved">0</div>
+                        <div class="metric-label">Days Saved</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val" id="cost-saved">$0</div>
+                        <div class="metric-label">Cost Saved</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val" id="events-prevented">0</div>
+                        <div class="metric-label">Prevented</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val" id="pending-risks">0</div>
+                        <div class="metric-label">Pending</div>
+                    </div>
+                </div>
+                <canvas id="trend-chart" style="margin-top:15px;"></canvas>
+            </div>
+        </div>
+
+        <!-- Panel 4: MEMORY INTELLIGENCE (NEW - CRITICAL) -->
+        <div class="panel" style="border-color: #ff00ff;">
+            <div class="panel-header" style="background: #ff00ff; color: #000;">
+                <span>🧬 ADAPTIVE MEMORY INSIGHTS</span>
+                <span id="adaptation-score">0%</span>
+            </div>
+            <div class="panel-content" id="memory-insights">
+                <div style="color:#888; font-size:11px;">Loading memory insights...</div>
+            </div>
+        </div>
+
+        <!-- Panel 5: Suggestions + Raw Stream -->
+        <div class="panel">
+            <div class="panel-header">
+                <span>💡 AI SUGGESTIONS</span>
+            </div>
+            <div class="panel-content">
+                <div id="suggestions-list"></div>
+                <hr style="border-color: var(--text-dim); margin: 10px 0;">
+                <div style="font-size:10px; color: var(--text-dim); margin-bottom: 5px;">RAW DATA STREAM</div>
+                <div id="stream-logs" style="max-height: 150px; overflow-y: auto;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === MAP ===
+        const map = L.map('map').setView([20, 0], 2);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; CartoDB'
+        }).addTo(map);
+
+        const riskMarkers = {};
+        const riskColors = { high: '#ff0055', medium: '#ffff00', low: '#00ff41' };
+
+        const locationCoords = {
+            "Suez Canal": [30.5, 32.3],
+            "Panama Canal": [9.1, -79.7],
+            "Singapore": [1.3, 103.8],
+            "Rotterdam": [51.9, 4.5],
+            "Hamburg": [53.5, 10.0],
+            "Los Angeles": [33.7, -118.2],
+            "Shanghai": [31.2, 121.5],
+            "Mumbai": [19.0, 72.8],
+        };
+
+        function addRiskMarker(location, severity, eventType) {
+            const coords = locationCoords[location] || [0, 0];
+            const color = severity > 80 ? riskColors.high : severity > 50 ? riskColors.medium : riskColors.low;
+
+            if (riskMarkers[location]) {
+                map.removeLayer(riskMarkers[location]);
+            }
+
+            const marker = L.circleMarker(coords, {
+                radius: 10,
+                fillColor: color,
+                color: color,
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.6
+            }).addTo(map);
+
+            marker.bindPopup(`<b>${location}</b><br>Risk: ${severity}<br>Type: ${eventType}`);
+            riskMarkers[location] = marker;
+
+            document.getElementById('map-stats').innerText = `${Object.keys(riskMarkers).length} markers`;
+        }
+
+        // === CHART ===
+        const ctx = document.getElementById('trend-chart').getContext('2d');
+        const trendData = { labels: [], datasets: [{ label: 'Risk Score', data: [], borderColor: '#00ff41', tension: 0.4 }] };
+        const trendChart = new Chart(ctx, { type: 'line', data: trendData, options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100 } } } });
+
+        // === WEBSOCKET ===
+        const ws = new WebSocket("ws://" + window.location.host + "/ws");
+        const allEvents = [];
+        let traceCount = 0;
+
+        ws.onmessage = function (event) {
+            const msg = JSON.parse(event.data);
+            if (msg.type !== "telemetry") return;
+
+            const data = msg.data;
+            const metrics = msg.metrics;
+            allEvents.push(data);
+
+            // Update Metrics
+            document.getElementById('mttd').innerText = metrics.mttd_seconds !== null ? metrics.mttd_seconds + "s" : "CALC...";
+            document.getElementById('mtta').innerText = metrics.mtta_seconds !== null ? metrics.mtta_seconds + "s" : "WAIT...";
+            document.getElementById('days-saved').innerText = metrics.estimated_days_saved + "d";
+            document.getElementById('cost-saved').innerText = "$" + (metrics.estimated_cost_saved || 0).toLocaleString();
+            document.getElementById('events-prevented').innerText = metrics.events_prevented || 0;
+            document.getElementById('pending-risks').innerText = metrics.predicted_delays || 0;
+
+            const time = new Date(data.timestamp).toLocaleTimeString();
+
+            // Map + Stream
+            if (data.agent_state === "OBSERVE") {
+                const location = data.details.location || "Unknown";
+                const topic = data.details.topic || "Event";
+
+                addRiskMarker(location, 70, topic);
+
+                const streamLog = document.getElementById('stream-logs');
+                const entry = document.createElement('div');
+                entry.className = 'log-entry OBSERVE';
+                entry.innerText = `[${time}] ${topic} @ ${location}`;
+                streamLog.insertBefore(entry, streamLog.firstChild);
+            }
+
+            // Reasoning Trace
+            if (["ANALYZE", "DECIDE", "ACT"].includes(data.agent_state)) {
+                const traceLog = document.getElementById('trace-logs');
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${data.agent_state}`;
+
+                let text = `[${time}] `;
+                if (data.agent_state === "ANALYZE") text += `ANALYSIS: ${data.details.thought || 'Processing...'}`;
+                else if (data.agent_state === "DECIDE") {
+                    text += `DECISION: ${data.details.action} (Risk: ${data.details.risk})`;
+
+                    // Update chart
+                    trendData.labels.push(time);
+                    trendData.datasets[0].data.push(data.details.risk || 50);
+                    if (trendData.labels.length > 20) {
+                        trendData.labels.shift();
+                        trendData.datasets[0].data.shift();
+                    }
+                    trendChart.update();
+
+                    // Map update with real severity
+                    if (data.details.location) {
+                        addRiskMarker(data.details.location, data.details.risk, 'Risk');
+                    }
+
+                    // Suggestions
+                    updateSuggestions(data.details.risk, data.details.location || "Unknown");
+                }
+                else if (data.agent_state === "ACT") text += `⚡ EXECUTED: ${data.details.result}`;
+
+                entry.innerText = text;
+                traceLog.insertBefore(entry, traceLog.firstChild);
+                traceCount++;
+                document.getElementById('trace-count').innerText = `${traceCount} events`;
+            }
+        };
+
+        // === SUGGESTIONS ===
+        function updateSuggestions(riskScore, location) {
+            const container = document.getElementById('suggestions-list');
+            container.innerHTML = '';
+
+            const suggestions = [];
+            if (riskScore > 80) {
+                suggestions.push({ action: 'REROUTE SHIPMENT', desc: `Immediately reroute via alternate route`, conf: 0.95, auto: true });
+                suggestions.push({ action: 'NOTIFY STAKEHOLDERS', desc: 'Send emergency alerts', conf: 0.92, auto: true });
+            }
+            if (riskScore > 50) {
+                suggestions.push({ action: 'PRIORITIZE CRITICAL', desc: 'Expedite time-sensitive cargo', conf: 0.85, auto: false });
+                suggestions.push({ action: 'SCHEDULE ALTERNATIVE', desc: 'Pre-book backup routes', conf: 0.78, auto: false });
+            }
+
+            suggestions.slice(0, 4).forEach(s => {
+                const div = document.createElement('div');
+                div.className = `suggestion ${s.auto ? 'auto' : ''}`;
+                div.innerHTML = `
+                    <span class="action">${s.action}</span>
+                    <span class="confidence">${(s.conf * 100).toFixed(0)}%</span>
+                    <div style="color: #888; margin-top: 3px;">${s.desc}</div>
+                    ${s.auto ? '<div style="color:#ff00ff; font-size:10px;">🤖 AUTO-EXECUTING</div>' : ''}
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // === EXPORT ===
+        function exportLogs() {
+            const blob = new Blob([JSON.stringify(allEvents, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'sentinel_logs_' + new Date().toISOString().slice(0, 10) + '.json';
+            a.click();
+        }
+
+        // === POST-TRANSFORMER TOGGLE ===
+        function togglePostTransformer() {
+            const modal = document.getElementById('post-transformer-modal');
+            modal.style.display = modal.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // === MEMORY INSIGHTS ===
+        async function fetchMemoryInsights() {
+            try {
+                const response = await fetch('/api/memory-insights');
+                const data = await response.json();
+
+                const container = document.getElementById('memory-insights');
+                container.innerHTML = '';
+
+                // Confidence Trend
+                const confDiv = document.createElement('div');
+                confDiv.style.cssText = 'background: rgba(255,0,255,0.1); padding:10px; margin-bottom:10px; border-left: 3px solid #ff00ff;';
+                confDiv.innerHTML = `
+                    <div style="color:#00ffff; font-weight:bold;">SYSTEM CONFIDENCE</div>
+                    <div style="font-size:24px; color:#00ff41;">${data.confidence_trend.initial}% → <span style="color:#ffff00;">${data.confidence_trend.current}%</span></div>
+                    <div style="font-size:10px; color:#888;">Improved based on ${data.total_events_learned || 0} events learned</div>
+                `;
+                container.appendChild(confDiv);
+
+                // Insights List
+                if (data.insights && data.insights.length > 0) {
+                    data.insights.forEach(insight => {
+                        const insightDiv = document.createElement('div');
+                        insightDiv.style.cssText = 'padding:5px 0; border-bottom: 1px solid #008f11; font-size:11px;';
+                        insightDiv.innerText = insight;
+                        container.appendChild(insightDiv);
+                    });
+                }
+
+                // Recurring Patterns
+                if (data.recurring_patterns && data.recurring_patterns.length > 0) {
+                    const patternDiv = document.createElement('div');
+                    patternDiv.style.cssText = 'margin-top:10px; font-size:10px; color:#ff00ff;';
+                    patternDiv.innerHTML = `<b>RECURRING RISK ZONES:</b> ${data.recurring_patterns.join(', ')}`;
+                    container.appendChild(patternDiv);
+                }
+
+                // Update adaptation score
+                document.getElementById('adaptation-score').innerText = `${data.adaptation_score || 0}%`;
+
+            } catch (e) {
+                console.error('Memory insights error:', e);
+            }
+        }
+
+        // Fetch memory insights every 10 seconds
+        fetchMemoryInsights();
+        setInterval(fetchMemoryInsights, 10000);
+    </script>
+</body>
+
+</html>
