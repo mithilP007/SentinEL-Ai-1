@@ -78,6 +78,10 @@ Access the dashboard at `http://localhost:8000`.
 SentinEL is optimized for Indian logistical corridors. 
 *   **Route**: Chennai → surat
 *   **Sensed Events**: NH44 road works, Pongal holiday traffic, Salem regional diversions.
+*   OUR FRONTEND -
+<img width="1914" height="874" alt="image" src="https://github.com/user-attachments/assets/cfc750cf-939c-4d94-96ad-519784081150" />
+<img width="643" height="615" alt="image" src="https://github.com/user-attachments/assets/33a23dbf-69f2-4e9f-8a6b-ac9d3f7c1802" />
+
 
 ---
 
