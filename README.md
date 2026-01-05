@@ -11,7 +11,7 @@
 ### 🧠 Smart AI Route Analysis
 Input your origin and destination and let **Gemini 2.0** analyze multiple route alternatives. SentinEL evaluates:
 *   **Real-Time Weather**: Integration with Open-Meteo for severe storm detection.
-*   **Global Threat Feeds**: Real-time GDELT news analysis for strikes, port closures, and geopolitical tensions.
+*   **Global Threat Feeds**: Real-time GDELT news analysis for strikes, events, road conditions, wheather and geopolitical tensions.
 *   **Safety Scoring**: Dynamic risk scores from 0-100 for every route option.
 
 ### 🚚 Real-Time Journey Tracking
@@ -76,7 +76,7 @@ Access the dashboard at `http://localhost:8000`.
 
 ## 🗺️ Local Demo (India Focus)
 SentinEL is optimized for Indian logistical corridors. 
-*   **Route**: Chennai → Coimbatore
+*   **Route**: Chennai → surat
 *   **Sensed Events**: NH44 road works, Pongal holiday traffic, Salem regional diversions.
 
 ---
