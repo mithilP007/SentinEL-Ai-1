@@ -32,6 +32,12 @@ SentinEL doesn't rely on mocks. It uses:
 *   **Pathway**: High-performance stream processing engine for low-latency analysis.
 
 ---
+Flowchart - 
+<img width="783" height="274" alt="image" src="https://github.com/user-attachments/assets/ba1f90d0-e40a-4780-8a58-927b7eaac3ba" />
+
+Our PipeLine -
+<img width="769" height="303" alt="image" src="https://github.com/user-attachments/assets/ecc0660e-5505-48c8-87fb-3d3ea84e6c6d" />
+
 
 ## 🛠️ Architecture
 
