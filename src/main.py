@@ -1,81 +1,111 @@
-import pathway as pw
-from src.ingestion import get_news_table, get_shipment_table
+from src.ingestion_live import flow_gdelt_news, flow_ais
 from src.perception import detect_affected_shipments
 from src.agent_brain import build_agent_graph
 from src.memory import MemoryManager
 import threading
 import time
+import json
+import os
+import asyncio
 
 # --- Setup System ---
 
-print("--- INITIALIZING SENTINEL ---")
+print("--- INITIALIZING SENTINEL (WINDOWS RUNTIME) ---")
 agent_graph = build_agent_graph()
 memory = MemoryManager()
 
-# --- Pathway Pipeline ---
-# 1. Get Streams
-news_table = get_news_table()
-shipment_table = get_shipment_table()
-
-# 2. Join/Filter Logic (The "Perception" Layer in Pathway)
-# Since we need to join an "Event" stream with "State" (Shipments),
-# In a full Pathway app we'd use `pw.join`.
-# For this demo, we will subscribe to the NEWS table and look up shipments in the callback.
-# To make "shipments" available to the callback, we'll keep a local cache of the latest shipment table snapshot.
-# (Note: In pure Pathway, you'd do the join in the engine. Here we bridge to Python for the Agent).
-
+# --- Shared State ---
 latest_shipments = []
+shipments_lock = threading.Lock()
 
-def on_shipment_change(key, row, time, is_addition):
+def load_active_route_shipment():
+    """Reads the active route from disk if it exists."""
+    if os.path.exists("active_route.json"):
+        try:
+            with open("active_route.json", "r") as f:
+                return json.load(f)
+        except:
+            pass
+    return None
+
+def on_shipment_received(row):
     """Updates local cache of shipments."""
-    if is_addition:
+    with shipments_lock:
+        # Check if already in list (by shipment_id)
+        existing = next((s for s in latest_shipments if s['shipment_id'] == row['shipment_id']), None)
+        if existing:
+            latest_shipments.remove(existing)
         latest_shipments.append(row)
-    else:
-        # Simplification: In a real stream, we handle updates/deletes.
-        # For this infinite "new status" stream, we just append or replace.
-        pass
+        # Keep cache size reasonable
+        if len(latest_shipments) > 50:
+            latest_shipments.pop(0)
 
-def on_news_event(key, row, time, is_addition):
+async def on_news_received(row):
     """
     Triggered whenever a new News item arrives.
     Fires the Agent.
     """
-    if not is_addition:
-        return
-
-    print(f"\n[PATHWAY DETECTED] New Event: {row['topic']} at {row['location']}")
+    print(f"\n[EVENT DETECTED] {row['topic']} at {row['location']}")
     
-    # 3. Trigger Agent
+    # Check for user active route and inject it into shipments
+    active_route = load_active_route_shipment()
+    
+    with shipments_lock:
+        combined_shipments = list(latest_shipments)
+    
+    if active_route:
+        combined_shipments.append(active_route)
+    
+    # Trigger Agent
     initial_state = {
         "raw_event": row,
-        "active_shipments": latest_shipments, # Injected from live cache
+        "active_shipments": combined_shipments,
         "affected_shipments": [],
         "analysis_logs": [],
         "decisions": [],
         "actions_taken": []
     }
     
-    # Invoke LangGraph
     print(">>> WAKING AGENT...")
-    result = agent_graph.invoke(initial_state)
-    
-    # 4. Log Result
-    if result and result.get('decisions'):
-        print(">>> AGENT FINISHED. Decisions made.")
-        memory.log_outcome(row, result['decisions'])
-    else:
-        print(">>> AGENT FINISHED. No actions needed.")
+    try:
+        result = await agent_graph.ainvoke(initial_state)
+        
+        if result and result.get('decisions'):
+            print(">>> AGENT FINISHED. Decisions made.")
+        else:
+            print(">>> AGENT FINISHED. No actions needed.")
+    except Exception as e:
+        print(f">>> AGENT ERROR: {e}")
 
-# --- Run ---
+# --- Worker Threads ---
 
-def run_simulation():
-    # Subscribe to streams
-    # We use `pw.io.subscribe` to trigger python functions on updates
-    pw.io.subscribe(shipment_table, on_shipment_change)
-    pw.io.subscribe(news_table, on_news_event)
+def shipment_worker():
+    print("[RUNNER] Shipment stream started.")
+    for shipment in flow_ais():
+        on_shipment_received(shipment)
+
+def news_worker():
+    print("[RUNNER] News stream started.")
+    # Since news_received is async, we need an event loop in this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     
-    print("--- LIVE STREAMS STARTED. WAITING FOR EVENTS... ---")
-    pw.run()
+    for event in flow_gdelt_news():
+        loop.run_until_complete(on_news_received(event))
+
+def run():
+    t1 = threading.Thread(target=shipment_worker, daemon=True)
+    t2 = threading.Thread(target=news_worker, daemon=True)
+    
+    t1.start()
+    t2.start()
+    
+    print("--- REAL-TIME MONITORING ACTIVE ---")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("Stopping...")
 
 if __name__ == "__main__":
-    run_simulation()
+    run()

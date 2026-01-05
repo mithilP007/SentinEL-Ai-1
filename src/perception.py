@@ -20,8 +20,15 @@ def check_intersection(event_location: str, shipment: Dict[str, Any]) -> bool:
     if evt_loc in shp_loc or shp_loc in evt_loc:
         return True
         
-    # 2. Route Match (Simulated Knowledge)
-    # e.g., if event is "Suez" and route is "Route_A_Suez"
+    # 2. Waypoint Match (For User Defined Routes)
+    waypoints = shipment.get('waypoints', [])
+    if waypoints:
+        for wp in waypoints:
+            wp_addr = normalize_location(wp.get('address', ''))
+            if evt_loc in wp_addr or wp_addr in evt_loc:
+                return True
+
+    # 3. Route String Match (Simulated/Legacy Knowledge)
     if evt_loc in shp_route:
         return True
         

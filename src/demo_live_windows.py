@@ -40,31 +40,66 @@ async def run_live_demo():
     
     print(f"Tracking {len(active_shipments)} vessels in real-time.")
     
-    # 2. Process News Stream (Live GDELT)
+    # 2. Process Streams (Live GDELT + AIS)
     print(">>> Listening for Disruption Signals (GDELT)...")
     news_gen = flow_gdelt_news()
     
-    print(">>> Listening for Disruption Signals (GDELT)...")
-    news_gen = flow_gdelt_news()
-    
+    iteration = 0
     while True:
         try:
-            # Poll GDELT
+            # 1. SYSTEM SYNC: Check for User's Active Route
+            import os
+            import json
+            if os.path.exists("active_route.json"):
+                try:
+                    with open("active_route.json", "r") as f:
+                        user_route = json.load(f)
+                    
+                    # Ensure User Route is in the active buffer
+                    found = False
+                    for i, s in enumerate(active_shipments):
+                        if s["shipment_id"] == "USER_ACTIVE_ROUTE":
+                            active_shipments[i] = user_route # Update latest
+                            found = True
+                            break
+                    if not found:
+                        active_shipments.insert(0, user_route) # Priority #1
+                        print(f"\n[SYNC] User Route Detected: {user_route['route_id']}. Activating priority monitoring.")
+                except Exception: pass
+            
+            # Periodically refresh AIS buffer
+            if iteration % 5 == 0:
+                try:
+                    new_ship = next(shipments_gen)
+                    active_shipments.append(new_ship)
+                    if len(active_shipments) > 15: # Keep buffer manageable
+                        active_shipments.pop(0)
+                except Exception: pass
+
+            # Non-blocking poll for GDELT (via next() on the generator)
+            # Note: next() is blocking, but flow_gdelt_news yields batch
             try:
                 event = next(news_gen)
             except StopIteration:
-                print("Stream buffer empty, retrying...")
-                await asyncio.sleep(2)
+                await asyncio.sleep(5)
                 continue
             
             # Emit "Event Detected" to UI
+            # We add coordinates here if not present for mapping
+            from src.route_service import get_coordinates_for_location
+            coords = get_coordinates_for_location(event['location'])
+            
             await AgentTelemetry.emit(
                 AgentState.OBSERVE, 
                 event['event_id'], 
-                {"topic": event['topic'], "location": event['location']}
+                {
+                    "topic": event['topic'], 
+                    "location": event['location'],
+                    "coords": {"lat": coords[0], "lng": coords[1]} if coords else None
+                }
             )
             
-            # Trigger Agent
+            # Trigger Agent Graph
             state = {
                 "raw_event": event,
                 "active_shipments": active_shipments,
@@ -74,23 +109,21 @@ async def run_live_demo():
                 "actions_taken": []
             }
             
-            # Run Graph (Async)
+            # Run Graph
             result = await agent_graph.ainvoke(state)
             
-            # Log
+            # Store memory
             if result.get("decisions"):
                 memory.log_outcome(event, result['decisions'])
-                
-            # Real-time polling interval
-            await asyncio.sleep(3)
+            
+            iteration += 1
+            await asyncio.sleep(2) # Throttle for readability
             
         except KeyboardInterrupt:
             break
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            print(f"Error: {e}")
-            await asyncio.sleep(1) # Backoff
+            print(f"\n[ERROR] {e}")
+            await asyncio.sleep(5)
     
     print("\n--- LIVE FEED DISCONNECTED ---")
     

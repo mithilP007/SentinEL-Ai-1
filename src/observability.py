@@ -16,7 +16,18 @@ class AgentState(str, Enum):
     ACT = "ACT"
     IDLE = "IDLE"
 
+# Persistent session for HTTP Bridge
+_http_session: Optional['aiohttp.ClientSession'] = None
+
 class AgentTelemetry:
+    @staticmethod
+    async def _get_session():
+        global _http_session
+        import aiohttp
+        if _http_session is None or _http_session.closed:
+            _http_session = aiohttp.ClientSession()
+        return _http_session
+
     @staticmethod
     async def emit(
         state: AgentState, 
@@ -35,28 +46,30 @@ class AgentTelemetry:
             "confidence": confidence
         }
         
-        # 1. Console Log (Structured)
-        print(f"\n[TELEMETRY] {json.dumps(payload, default=str)}")
+        # 1. Console Log
+        print(f"\r[AGENT] {state.value} | {event_id} | {details.get('topic', details.get('thought', '...'))[:50]}", end="")
         
-        # 2. Broadcast to UI
-        # Try local queue first (if in same process)
+        # 2. Local Broadcast
         await broadcast_queue.put(payload)
         
-        # 3. HTTP Bridge (Bridge to separate Dashboard process)
-        # Include current metrics snapshot so Dashboard shows live values
+        # 3. HTTP Bridge (To Dashboard)
         try:
             from src.metrics import metrics
             metrics_snapshot = metrics.get_metrics_snapshot()
             
-            import aiohttp
-            full_payload = {
+            payload_with_metrics = {
                 "telemetry": payload,
                 "metrics": metrics_snapshot
             }
-            async with aiohttp.ClientSession() as session:
-                await session.post("http://localhost:8000/ingest/telemetry", json=full_payload)
+            
+            session = await AgentTelemetry._get_session()
+            async with session.post(
+                "http://localhost:8000/ingest/telemetry", 
+                json=payload_with_metrics,
+                timeout=2
+            ) as resp:
+                pass
         except Exception:
-            # If dashboard is down or connection fails, just ignore (log is preserved)
             pass
 
     @staticmethod

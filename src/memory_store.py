@@ -85,6 +85,25 @@ class EventMemory:
             for r in rows
         ]
 
+    def get_recent_events(self, limit: int = 50) -> List[Dict]:
+        """
+        Get recent events with topic field for corridor filtering.
+        Returns events with location, topic (event_type), and severity.
+        """
+        events = self.get_all_events(limit=limit)
+        # Map event_type to topic for compatibility with route filtering
+        return [
+            {
+                "event_id": e["event_id"],
+                "timestamp": e["timestamp"],
+                "location": e["location"],
+                "topic": e["event_type"],
+                "severity": e["severity"],
+                "summary": f"{e['event_type']} at {e['location']}"
+            }
+            for e in events
+        ]
+
     def get_trends(self) -> Dict[str, Any]:
         """
         Returns frequency analysis by location and event type.
@@ -191,6 +210,88 @@ class EventMemory:
             "total_events_learned": len(events),
             "total_actions_taken": action_count,
             "total_days_saved": round(total_days_saved, 1)
+        }
+
+    def get_realtime_insights(self, journey_data: Dict = None) -> Dict[str, Any]:
+        """
+        Generate REAL-TIME insights based on current journey and recent events.
+        This is what the Post-Transformer panel should show during active monitoring.
+        """
+        import time
+        from datetime import datetime
+        
+        # Get events from last 5 minutes only (real-time)
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        five_min_ago = time.time() - 300
+        
+        cursor.execute('''
+            SELECT * FROM events WHERE timestamp > ? ORDER BY timestamp DESC LIMIT 20
+        ''', (five_min_ago,))
+        recent_rows = cursor.fetchall()
+        conn.close()
+        
+        recent_events = [
+            {
+                "event_id": r[0],
+                "timestamp": r[1],
+                "location": r[2],
+                "event_type": r[3],
+                "severity": r[4],
+                "action_taken": r[5],
+                "days_saved": r[6]
+            }
+            for r in recent_rows
+        ]
+        
+        insights = []
+        current_time = datetime.now().strftime("%H:%M:%S")
+        
+        if journey_data:
+            # Journey-specific insights
+            progress = journey_data.get("progress_percent", 0)
+            threats = journey_data.get("threats_count", 0)
+            weather_severity = journey_data.get("weather_severity", 0)
+            
+            insights.append(f"📍 Journey Progress: {progress}% complete")
+            
+            if threats > 0:
+                insights.append(f"⚠️ {threats} active threats detected on route")
+            else:
+                insights.append(f"✅ Route clear - no immediate threats")
+            
+            if weather_severity >= 6:
+                insights.append(f"🌧️ SEVERE WEATHER on route (severity {weather_severity}/10)")
+            elif weather_severity >= 4:
+                insights.append(f"⛅ Moderate weather conditions along route")
+            else:
+                insights.append(f"☀️ Weather conditions favorable")
+        
+        if recent_events:
+            # Real-time event analysis
+            location_set = set(e["location"] for e in recent_events)
+            insights.append(f"🔴 LIVE: Monitoring {len(location_set)} active zones")
+            
+            high_severity = [e for e in recent_events if e["severity"] >= 7]
+            if high_severity:
+                insights.append(f"🚨 {len(high_severity)} high-severity events in last 5 min")
+        else:
+            insights.append(f"📡 Scanning for real-time events...")
+        
+        # Real-time confidence (based on data freshness)
+        data_freshness = min(100, len(recent_events) * 10 + 60)
+        
+        return {
+            "insights": insights[:5],
+            "confidence_trend": {
+                "initial": 60,
+                "current": data_freshness
+            },
+            "adaptation_score": data_freshness,
+            "recurring_patterns": list(set(e["location"] for e in recent_events))[:3] if recent_events else [],
+            "total_events_learned": len(recent_events),
+            "is_realtime": True,
+            "last_update": current_time
         }
 
 # Global singleton

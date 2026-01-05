@@ -73,6 +73,31 @@ def generate_suggestions(event_type: str, risk_score: float, location: str) -> L
             "priority": "MEDIUM",
             "auto_execute": False
         })
+
+    if event_type == "Road Condition":
+        suggestions.append({
+            "action": "ROUTE_OPTIMIZATION",
+            "description": f"Recalculate land route due to local road disruptions at {location}",
+            "confidence": 0.90,
+            "priority": "HIGH",
+            "auto_execute": risk_score > 70
+        })
+        suggestions.append({
+            "action": "NOTIFY_DRIVERS",
+            "description": "Push real-time traffic alerts to all connected fleet vehicles",
+            "confidence": 0.95,
+            "priority": "CRITICAL",
+            "auto_execute": True
+        })
+
+    if event_type == "Holiday/Event":
+        suggestions.append({
+            "action": "BUFFER_TIME_ADJUSTMENT",
+            "description": f"Apply +20% transit buffer due to {location} festival/holiday traffic",
+            "confidence": 0.85,
+            "priority": "MEDIUM",
+            "auto_execute": False
+        })
     
     # Sort by confidence
     suggestions.sort(key=lambda x: -x["confidence"])
