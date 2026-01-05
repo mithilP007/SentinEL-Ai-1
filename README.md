@@ -15,7 +15,7 @@ Input your origin and destination and let **Gemini 2.0** analyze multiple route 
 *   **Safety Scoring**: Dynamic risk scores from 0-100 for every route option.
 
 ### 🚚 Real-Time Journey Tracking
-Monitor your shipments live on an interactive **Leaflet-powered map**. 
+Monitor your location live on an interactive **Leaflet-powered map**. 
 *   **GPS-Synchronized Monitoring**: Track progress with simulated high-fidelity telemetry.
 *   **Dynamic Rerouting**: AI-driven suggestions to take diversions if a new threat (like a festival blockade or road closure) is detected live.
 
@@ -28,7 +28,7 @@ Track critical logistical KPIs in a premium dark-mode dashboard:
 ### 📡 Live Data Fabric
 SentinEL doesn't rely on mocks. It uses:
 *   **GDELT Project**: Scans global news every 60 seconds.
-*   **AIS Data**: Real-time ship positioning streams.
+*   **AIS Data**: Real-time travel road conditions positioning streams.
 *   **Pathway**: High-performance stream processing engine for low-latency analysis.
 
 ---
